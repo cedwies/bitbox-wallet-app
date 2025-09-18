@@ -647,6 +647,8 @@ func (backend *Backend) IncognitoMode() bool {
 // SetIncognitoMode lets you flip the incognito switch
 func (backend *Backend) SetIncognitoMode(incognito bool) {
 	backend.incognitoMode = incognito
+	// tell the config object about it too, so it knows whether to encrypt/decrypt files.
+	backend.config.SetIncognitoMode(incognito)
 }
 
 // Accounts returns the current accounts of the backend.
