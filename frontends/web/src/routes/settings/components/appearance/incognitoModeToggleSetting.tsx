@@ -26,15 +26,15 @@ import { IncognitoModeDeviceConnectedDialog } from './dialogs/incognitoModeDevic
 export const IncognitoModeToggleSetting = () => {
   const { t } = useTranslation();
   const { toggleIncognitoMode, isIncognitoMode } = useIncognitoMode();
-    const [dialogOpen, setDialogOpen] = useState(false); // for the 'device connected' popup
+  const [dialogOpen, setDialogOpen] = useState(false); // for the 'device connected' popup
 
-    // useKeystores is practical, it updates automatically when a device is connected or disconnected
+  // useKeystores is practical, it updates automatically when a device is connected or disconnected
   const keystores = useKeystores() || [];
   const hasConnectedDevice = keystores.length > 0;
 
-    // this is what happens when you click the toggle
+  // this is what happens when you click the toggle
   const handleToggleClick = () => {
-        // if a device is plugged in, we show the popup instead of toggling
+    // if a device is plugged in, we show the popup instead of toggling
     if (hasConnectedDevice) {
       setDialogOpen(true);
     } else {
@@ -45,7 +45,7 @@ export const IncognitoModeToggleSetting = () => {
 
   return (
     <>
-            {/* the popup dialog, it's hidden until you click the toggle with a device connected */}
+      {/* the popup dialog, it's hidden until you click the toggle with a device connected */}
       <IncognitoModeDeviceConnectedDialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}

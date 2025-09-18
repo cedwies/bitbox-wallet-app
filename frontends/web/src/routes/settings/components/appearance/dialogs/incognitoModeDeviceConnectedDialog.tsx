@@ -31,7 +31,7 @@ export const IncognitoModeDeviceConnectedDialog = ({ open, onClose }: Props) => 
     <Dialog title={t('incognitoMode.deviceConnected.title')} medium onClose={onClose} open={open}>
       <p>{t('incognitoMode.deviceConnected.message')}</p>
       <DialogButtons>
-                {/* just a simple confirm button, since it's only an info box */}
+        {/* just a simple confirm button, since it's only an info box */}
         <Button primary onClick={onClose}>{t('dialog.confirm')}</Button>
       </DialogButtons>
     </Dialog>
