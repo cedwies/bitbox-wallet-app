@@ -60,7 +60,7 @@ export const General = ({ devices, hasAccounts }: TPagePropsWithSettingsTabs) =>
                 <DefaultCurrencyDropdownSetting />
                 <ActiveCurrenciesDropdownSetting />
                 <DarkmodeToggleSetting />
-                <IncognitoModeToggleSetting /> // and here it is
+                <IncognitoModeToggleSetting />
                 { hasAccounts ? (
                   <>
                     <SubTitle className={`m-top-default ${style.subtitleWithMobilePadding}`}>

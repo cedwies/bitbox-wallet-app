@@ -653,7 +653,11 @@
     "toggle": "Dark mode"
   },
   "incognitoMode": {
-    "toggle": "Incognito mode"
+    "toggle": "Incognito mode",
+    "deviceConnected": {
+      "title": "Device Connected",
+      "message": "Please disconnect your device before enabling or disabling incognito mode."
+    }
   },
   "device": {
     "appUpradeRequired": "Your BitBox is not compatible with this desktop application. Please download and install the latest version.",

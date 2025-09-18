@@ -14,20 +14,47 @@
  * limitations under the License.
  */
 
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useIncognitoMode } from '@/hooks/incognitoMode';
 import { Toggle } from '@/components/toggle/toggle';
 import { SettingsItem } from '@/routes/settings/components/settingsItem/settingsItem';
+import { useKeystores } from '@/hooks/backend';
+import { IncognitoModeDeviceConnectedDialog } from './dialogs/incognitoModeDeviceConnectedDialog';
 
 // this is the actual toggle component that you see in the settings
 export const IncognitoModeToggleSetting = () => {
   const { t } = useTranslation();
   const { toggleIncognitoMode, isIncognitoMode } = useIncognitoMode();
+    const [dialogOpen, setDialogOpen] = useState(false); // for the 'device connected' popup
+
+    // useKeystores is practical, it updates automatically when a device is connected or disconnected
+  const keystores = useKeystores() || [];
+  const hasConnectedDevice = keystores.length > 0;
+
+    // this is what happens when you click the toggle
+  const handleToggleClick = () => {
+        // if a device is plugged in, we show the popup instead of toggling
+    if (hasConnectedDevice) {
+      setDialogOpen(true);
+    } else {
+      // no device? cool, just toggle the mode
+      toggleIncognitoMode(!isIncognitoMode);
+    }
+  };
+
   return (
-    <SettingsItem
-      settingName={t('incognitoMode.toggle')}
-      secondaryText={t('newSettings.appearance.incognitoMode.description')}
-      extraComponent={<Toggle checked={isIncognitoMode} onChange={() => toggleIncognitoMode(!isIncognitoMode)} />}
-    />
+    <>
+            {/* the popup dialog, it's hidden until you click the toggle with a device connected */}
+      <IncognitoModeDeviceConnectedDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+      />
+      <SettingsItem
+        settingName={t('incognitoMode.toggle')}
+        secondaryText={t('newSettings.appearance.incognitoMode.description')}
+        extraComponent={<Toggle checked={isIncognitoMode} onChange={handleToggleClick} />}
+      />
+    </>
   );
 };
