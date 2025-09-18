@@ -16,6 +16,7 @@
 
 import { ReactNode } from 'react';
 import { DarkModeProvider } from './DarkmodeProvider';
+import { IncognitoModeProvider } from './IncognitoModeProvider'; // for the incognito mode toggle
 import { AppProvider } from './AppProvider';
 import { BackButtonProvider } from './BackButtonContext';
 import { WCWeb3WalletProvider } from './WCWeb3WalletProvider';
@@ -31,13 +32,15 @@ export const Providers = ({ children }: Props) => {
     <AppProvider>
       <BackButtonProvider>
         <DarkModeProvider>
-          <LocalizationProvider>
-            <RatesProvider>
-              <WCWeb3WalletProvider>
-                {children}
-              </WCWeb3WalletProvider>
-            </RatesProvider>
-          </LocalizationProvider>
+          <IncognitoModeProvider>
+            <LocalizationProvider>
+              <RatesProvider>
+                <WCWeb3WalletProvider>
+                  {children}
+                </WCWeb3WalletProvider>
+              </RatesProvider>
+            </LocalizationProvider>
+          </IncognitoModeProvider>
         </DarkModeProvider>
       </BackButtonProvider>
     </AppProvider>

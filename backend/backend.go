@@ -259,6 +259,9 @@ type Backend struct {
 	// testing tells us whether the app is in testing mode
 	testing bool
 
+	// this flag is for incognito mode, so we dont save stuff to disk
+	incognitoMode bool
+
 	// isOnline indicates whether the backend is online, i.e. able to connect to the internet.
 	isOnline atomic.Bool
 
@@ -634,6 +637,16 @@ func (backend *Backend) ManualReconnect(reconnectETH bool) {
 // Testing returns whether this backend is for testing only.
 func (backend *Backend) Testing() bool {
 	return backend.testing
+}
+
+// IncognitoMode just tells you if incognito is on or off
+func (backend *Backend) IncognitoMode() bool {
+	return backend.incognitoMode
+}
+
+// SetIncognitoMode lets you flip the incognito switch
+func (backend *Backend) SetIncognitoMode(incognito bool) {
+	backend.incognitoMode = incognito
 }
 
 // Accounts returns the current accounts of the backend.

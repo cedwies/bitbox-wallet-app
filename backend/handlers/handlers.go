@@ -121,6 +121,10 @@ type Backend interface {
 	Bluetooth() *bluetooth.Bluetooth
 	IsOnline() bool
 	ConnectKeystore([]byte) (keystore.Keystore, error)
+	// check if incognito is on
+	IncognitoMode() bool
+	// turn incognito on or off
+	SetIncognitoMode(bool)
 }
 
 // Handlers provides a web api to the backend.
@@ -214,6 +218,8 @@ func NewHandlers(
 	getAPIRouterNoError(apiRouter)("/force-auth", handlers.postForceAuth).Methods("POST")
 	getAPIRouter(apiRouter)("/set-dark-theme", handlers.postDarkTheme).Methods("POST")
 	getAPIRouterNoError(apiRouter)("/detect-dark-theme", handlers.getDetectDarkTheme).Methods("GET")
+	getAPIRouter(apiRouter)("/set-incognito-mode", handlers.postIncognitoMode).Methods("POST")
+	getAPIRouterNoError(apiRouter)("/incognito-mode", handlers.getIncognitoMode).Methods("GET")
 	getAPIRouterNoError(apiRouter)("/version", handlers.getVersion).Methods("GET")
 	getAPIRouterNoError(apiRouter)("/testing", handlers.getTesting).Methods("GET")
 	getAPIRouterNoError(apiRouter)("/dev-servers", handlers.getDevServers).Methods("GET")
@@ -534,6 +540,21 @@ func (handlers *Handlers) postDarkTheme(r *http.Request) (interface{}, error) {
 
 func (handlers *Handlers) getDetectDarkTheme(r *http.Request) interface{} {
 	return handlers.backend.Environment().DetectDarkTheme()
+}
+
+// postIncognitoMode is the api endpoint to set the incognito mode.
+func (handlers *Handlers) postIncognitoMode(r *http.Request) (interface{}, error) {
+	var isIncognito bool
+	if err := json.NewDecoder(r.Body).Decode(&isIncognito); err != nil {
+		return nil, errp.WithStack(err)
+	}
+	handlers.backend.SetIncognitoMode(isIncognito)
+	return nil, nil
+}
+
+// getIncognitoMode is the api endpoint to get the current incognito state.
+func (handlers *Handlers) getIncognitoMode(r *http.Request) interface{} {
+	return handlers.backend.IncognitoMode()
 }
 
 func (handlers *Handlers) getVersion(*http.Request) interface{} {

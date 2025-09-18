@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { Main, Header, GuideWrapper, GuidedContent } from '@/components/layout';
 import { View, ViewContent } from '@/components/view/view';
 import { DarkmodeToggleSetting } from './components/appearance/darkmodeToggleSetting';
+import { IncognitoModeToggleSetting } from './components/appearance/incognitoModeToggleSetting'; // the new toggle
 import { NotesImport } from './components/appearance/notesImport';
 import { NotesExport } from './components/appearance/notesExport';
 import { DefaultCurrencyDropdownSetting } from './components/appearance/defaultCurrencyDropdownSetting';
@@ -59,6 +60,7 @@ export const General = ({ devices, hasAccounts }: TPagePropsWithSettingsTabs) =>
                 <DefaultCurrencyDropdownSetting />
                 <ActiveCurrenciesDropdownSetting />
                 <DarkmodeToggleSetting />
+                <IncognitoModeToggleSetting /> // and here it is
                 { hasAccounts ? (
                   <>
                     <SubTitle className={`m-top-default ${style.subtitleWithMobilePadding}`}>
