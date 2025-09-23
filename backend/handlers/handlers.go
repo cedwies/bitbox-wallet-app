@@ -125,6 +125,8 @@ type Backend interface {
 	IncognitoMode() bool
 	// turn incognito on or off
 	SetIncognitoMode(bool)
+	// unlock encrypted accounts with password
+	UnlockIncognitoAccounts(password string) error
 }
 
 // Handlers provides a web api to the backend.
@@ -218,8 +220,9 @@ func NewHandlers(
 	getAPIRouterNoError(apiRouter)("/force-auth", handlers.postForceAuth).Methods("POST")
 	getAPIRouter(apiRouter)("/set-dark-theme", handlers.postDarkTheme).Methods("POST")
 	getAPIRouterNoError(apiRouter)("/detect-dark-theme", handlers.getDetectDarkTheme).Methods("GET")
-	getAPIRouter(apiRouter)("/set-incognito-mode", handlers.postIncognitoMode).Methods("POST")
 	getAPIRouterNoError(apiRouter)("/incognito-mode", handlers.getIncognitoMode).Methods("GET")
+	getAPIRouter(apiRouter)("/set-incognito-mode", handlers.postIncognitoMode).Methods("POST")
+	getAPIRouter(apiRouter)("/unlock-incognito", handlers.postUnlockIncognito).Methods("POST")
 	getAPIRouterNoError(apiRouter)("/version", handlers.getVersion).Methods("GET")
 	getAPIRouterNoError(apiRouter)("/testing", handlers.getTesting).Methods("GET")
 	getAPIRouterNoError(apiRouter)("/dev-servers", handlers.getDevServers).Methods("GET")
@@ -555,6 +558,25 @@ func (handlers *Handlers) postIncognitoMode(r *http.Request) (interface{}, error
 // getIncognitoMode is the api endpoint to get the current incognito state.
 func (handlers *Handlers) getIncognitoMode(r *http.Request) interface{} {
 	return handlers.backend.IncognitoMode()
+}
+
+// postUnlockIncognito attempts to unlock encrypted accounts with a password
+func (handlers *Handlers) postUnlockIncognito(r *http.Request) (interface{}, error) {
+	var args struct {
+		Password string `json:"password"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
+		return nil, errp.WithStack(err)
+	}
+
+	if err := handlers.backend.UnlockIncognitoAccounts(args.Password); err != nil {
+		return nil, errp.WithStack(err)
+	}
+
+	return map[string]interface{}{
+		"success": true,
+	}, nil
 }
 
 func (handlers *Handlers) getVersion(*http.Request) interface{} {

@@ -665,6 +665,18 @@ func (backend *Backend) SetIncognitoMode(incognito bool) {
 	backend.ReinitializeAccounts()
 }
 
+// UnlockIncognitoAccounts attempts to decrypt and load accounts with the provided password
+func (backend *Backend) UnlockIncognitoAccounts(password string) error {
+	// try to unlock the config with the password
+	if err := backend.config.UnlockWithPassword(password); err != nil {
+		return err
+	}
+	
+	// reinitialize accounts with the newly loaded config
+	backend.ReinitializeAccounts()
+	return nil
+}
+
 // Accounts returns the current accounts of the backend.
 func (backend *Backend) Accounts() AccountsList {
 	defer backend.accountsAndKeystoreLock.RLock()()

@@ -258,6 +258,11 @@ type Config struct {
 	// we need this flag here so the config knows whether to encrypt/decrypt on its own,
 	// especially during startup before the main backend is fully running.
 	incognitoMode bool
+
+	// store the user password for encryption/decryption when in incognito mode
+	// it's needed because when AccountsConfig updates, it should update the
+	// accounts.json (so the password is needed to encrypt)
+	userPassword []byte
 }
 
 // NewConfig creates a new Config, stored in the given location. The filename must be writable, but
@@ -292,8 +297,12 @@ func NewConfig(appConfigFilename string, accountsConfigFilename string) (*Config
 	if err := config.SetAppConfig(appconf); err != nil {
 		return nil, errp.WithStack(err)
 	}
-	if err := config.ModifyAccountsConfig(migrateActiveTokens); err != nil {
-		return nil, errp.WithStack(err)
+	// only call ModifyAccountsConfig when ingcognito mode is disabled
+	// since it would otherwise erase the encrypted accounts.json
+	if !config.incognitoMode {
+		if err := config.ModifyAccountsConfig(migrateActiveTokens); err != nil {
+			return nil, errp.WithStack(err)
+		}
 	}
 	return config, nil
 }
@@ -329,23 +338,21 @@ func (config *Config) load() {
 	jsonBytes, err := os.ReadFile(config.appConfigFilename)
 	if err == nil {
 		if err := json.Unmarshal(jsonBytes, &config.appConfig); err != nil {
-			// Handle error or log
+			// Maybe do something here?
 		}
+	}
+
+	// skip loading accounts.json if incognito mode is enabled
+	// user will need to provide password later to decrypt and load accounts
+	if config.incognitoMode {
+		fmt.Printf("Incognito mode enabled - skipping accounts.json loading, using default config\n")
+		return
 	}
 
 	jsonBytes, err = os.ReadFile(config.accountsConfigFilename)
 	if err == nil {
-		// if incognito is on, accounts.json is encrypted so decrypt it
-		if config.incognitoMode {
-			decryptedBytes, err := decryptToJSON(jsonBytes, []byte("hello"))
-			if err != nil {
-				// decryption failed, maybe wrong password? just use empty config
-				return
-			}
-			jsonBytes = decryptedBytes
-		}
 		if err := json.Unmarshal(jsonBytes, &config.accountsConfig); err != nil {
-			// Handle error or log
+			// Maybe do something here?
 		}
 	}
 }
@@ -403,7 +410,12 @@ func (config *Config) save(filename string, conf interface{}) error {
 
 	// encrypt accounts.json if incognito mode is on
 	if filename == config.accountsConfigFilename && config.incognitoMode {
-		encryptedBytes, err := encryptJSONBytes(jsonBytes, []byte("hello"))
+		if len(config.userPassword) <= 0 {
+			// shouldnt happen, what then?
+		}
+		password := config.userPassword
+
+		encryptedBytes, err := encryptJSONBytes(jsonBytes, password)
 		if err != nil {
 			return errp.WithStack(err)
 		}
@@ -508,4 +520,38 @@ func (config *Config) IncognitoMode() bool {
 // SetIncognitoMode updates the incognito flag
 func (config *Config) SetIncognitoMode(incognito bool) {
 	config.incognitoMode = incognito
+}
+
+// UnlockWithPassword attempts to decrypt accounts.json with the provided password
+// and loads the accounts into memory, replacing any existing default accounts
+func (config *Config) UnlockWithPassword(password string) error {
+	if !config.incognitoMode {
+		// trivial
+		return fmt.Errorf("not in incognito mode")
+	}
+
+	// store the password for future save operations (see comment at attribute)
+	config.userPassword = []byte(password)
+
+	// try to read and decrypt accounts.json (could be non existent or corrupted)
+	jsonBytes, err := os.ReadFile(config.accountsConfigFilename)
+	if err != nil {
+		return fmt.Errorf("could not read accounts file: %w", err)
+	}
+
+	// attempt decryption with provided password
+	decryptedBytes, err := decryptToJSON(jsonBytes, []byte(password))
+	if err != nil {
+		// TODO: decide on whether a "wrong password" response should even be given
+		return fmt.Errorf("wrong password or corrupted file: %w", err)
+	}
+
+	// parse the decrypted JSON
+	defer config.accountsConfigLock.Lock()()
+	if err := json.Unmarshal(decryptedBytes, &config.accountsConfig); err != nil {
+		return fmt.Errorf("invalid accounts data: %w", err)
+	}
+
+	fmt.Printf("Successfully unlocked accounts with password - loaded %d accounts\n", len(config.accountsConfig.Accounts))
+	return nil
 }
