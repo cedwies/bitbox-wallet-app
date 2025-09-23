@@ -44,6 +44,7 @@ import { AuthRequired } from './components/auth/authrequired';
 import { WCSigningRequest } from './components/wallet-connect/incoming-signing-request';
 import { Providers } from './contexts/providers';
 import { BottomNavigation } from './components/bottom-navigation/bottom-navigation';
+import { IncognitoGuard } from './components/incognito-guard/incognito-guard'; // password gate wrapper
 import styles from './app.module.css';
 
 export const App = () => {
@@ -180,49 +181,58 @@ export const App = () => {
   return (
     <ConnectedApp>
       <Providers>
-        <Darkmode />
-        <div className="app">
-          <AuthRequired/>
-          <Sidebar
-            accounts={activeAccounts}
-            devices={devices}
-          />
-          <div className={`${styles.appContent} ${showBottomNavigation ? styles.hasBottomNavigation : ''}`}>
-            <WCSigningRequest />
-            <Aopp />
-            <KeystoreConnectPrompt />
-            {
-              Object.entries(devices).map(([deviceID, platformName]) => {
-                if (platformName === 'bitbox02') {
-                  return (
-                    <Fragment key={deviceID}>
-                      <BitBox02Wizard
-                        deviceID={deviceID}
-                      />
-                    </Fragment>
-                  );
-                }
-                return null;
-              })
-            }
-            <AppRouter
-              accounts={accounts}
-              activeAccounts={activeAccounts}
-              deviceIDs={deviceIDs}
+        {/*
+          IncognitoGuard wraps the entire app - if incognito mode is on
+          but no password is set, it shows the "hello" page instead
+          of the normal app content
+        */}
+        <IncognitoGuard>
+          <Darkmode />
+          <div className="app">
+            <AuthRequired/>
+            <Sidebar
+              accounts={activeAccounts}
               devices={devices}
-              devicesKey={devicesKey}
             />
-            <RouterWatcher />
+            <div className={`${styles.appContent} ${showBottomNavigation ? styles.hasBottomNavigation : ''}`}>
+              <WCSigningRequest />
+              <Aopp />
+              <KeystoreConnectPrompt />
+              {
+                // show device wizards for connected hardware wallets
+                Object.entries(devices).map(([deviceID, platformName]) => {
+                  if (platformName === 'bitbox02') {
+                    return (
+                      <Fragment key={deviceID}>
+                        <BitBox02Wizard
+                          deviceID={deviceID}
+                        />
+                      </Fragment>
+                    );
+                  }
+                  return null;
+                })
+              }
+              <AppRouter
+                accounts={accounts}
+                activeAccounts={activeAccounts}
+                deviceIDs={deviceIDs}
+                devices={devices}
+                devicesKey={devicesKey}
+              />
+              <RouterWatcher />
+            </div>
+            {/* only show bottom nav if we have devices or accounts */}
+            {showBottomNavigation && (
+              <BottomNavigation
+                devices={devices}
+                activeAccounts={activeAccounts}
+              />
+            )}
+            <Alert />
+            <Confirm />
           </div>
-          {showBottomNavigation && (
-            <BottomNavigation
-              devices={devices}
-              activeAccounts={activeAccounts}
-            />
-          )}
-          <Alert />
-          <Confirm />
-        </div>
+        </IncognitoGuard>
       </Providers>
     </ConnectedApp>
   );

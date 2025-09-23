@@ -649,14 +649,20 @@
     "promptNoName": "Please connect your BitBox to continue",
     "promptWithName": "Please connect your BitBox named \"{{name}}\" to continue"
   },
-  "darkmode": {
-    "toggle": "Dark mode"
-  },
+  "darkmode": {},
   "incognitoMode": {
+    "title": "Incognito mode",
     "toggle": "Incognito mode",
     "deviceConnected": {
-      "title": "Device Connected",
-      "message": "Please disconnect your device before enabling or disabling incognito mode."
+      "title": "Device connected",
+      "message": "To enable or disable incognito mode, please disconnect your BitBox02 first."
+    },
+    "passwordSetup": {
+      "title": "Set incognito password",
+      "description": "You are enabling incognito mode. Please set a password to encrypt your accounts. If you forget this password, your accounts will be lost.",
+      "password": "Password",
+      "confirmPassword": "Confirm password",
+      "passwordsDonotMatch": "Passwords do not match."
     }
   },
   "device": {

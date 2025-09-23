@@ -1,27 +1,19 @@
-/**
- * Copyright 2025 Shift Crypto AG
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 import { apiGet, apiPost } from '@/utils/request';
 
-// tells the backend to turn incognito on or off
-export const setIncognitoMode = (isIncognito: boolean): Promise<null> => {
-  return apiPost('set-incognito-mode', isIncognito);
+// tells the backend to flip incognito mode on or off
+// when turning ON, you need to provide a password
+// when turning OFF, password can be empty string
+export const setIncognitoMode = (isIncognito: boolean, password: string = ''): Promise<null> => {
+  return apiPost('set-incognito-mode', { incognitoMode: isIncognito, password });
 };
 
-// asks the backend if incognito is currently active
+// asks the backend if incognito mode is currently enabled
 export const getIncognitoMode = (): Promise<boolean> => {
   return apiGet('incognito-mode');
+};
+
+// checks if the backend has a password stored (length > 0)
+// this is used to decide whether to show the password gate or not
+export const getIncognitoPasswordStatus = (): Promise<boolean> => {
+  return apiGet('incognito-password-status');
 };

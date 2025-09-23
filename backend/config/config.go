@@ -412,6 +412,7 @@ func (config *Config) save(filename string, conf interface{}) error {
 	if filename == config.accountsConfigFilename && config.incognitoMode {
 		if len(config.userPassword) <= 0 {
 			// shouldnt happen, what then?
+			// for now, encrypt with ""
 		}
 		password := config.userPassword
 
@@ -517,9 +518,22 @@ func (config *Config) IncognitoMode() bool {
 	return config.incognitoMode
 }
 
-// SetIncognitoMode updates the incognito flag
-func (config *Config) SetIncognitoMode(incognito bool) {
+// HasIncognitoPassword checks if a password has been set for incognito mode
+func (config *Config) HasIncognitoPassword() bool {
+	return len(config.userPassword) > 0
+}
+
+// SetIncognitoMode sets the incognito mode flag and optionally stores the password
+func (config *Config) SetIncognitoMode(incognito bool, password string) {
 	config.incognitoMode = incognito
+	// store password when enabling incognito mode
+	if incognito && password != "" {
+		config.userPassword = []byte(password)
+	}
+	// clear password when disabling incognito mode
+	if !incognito {
+		config.userPassword = nil
+	}
 }
 
 // UnlockWithPassword attempts to decrypt accounts.json with the provided password

@@ -645,17 +645,23 @@ func (backend *Backend) IncognitoMode() bool {
 	return backend.incognitoMode
 }
 
+// HasIncognitoPassword checks if a password has been set for incognito mode
+func (backend *Backend) HasIncognitoPassword() bool {
+	return backend.config.HasIncognitoPassword()
+}
+
 // SetIncognitoMode lets you flip the incognito switch
-func (backend *Backend) SetIncognitoMode(incognito bool) {
+func (backend *Backend) SetIncognitoMode(incognito bool, password string) {
 	// dont do anything if we're already in the right mode
-	// this prevents clearing accounts unnecessarily 
+	// this prevents clearing accounts unnecessarily
 	if backend.incognitoMode == incognito {
 		return
 	}
-	
+
 	backend.incognitoMode = incognito
 	// tell config about the change so it knows to encrypt stuff
-	backend.config.SetIncognitoMode(incognito)
+	// when enabling incognito, pass the password; when disabling, pass empty string
+	backend.config.SetIncognitoMode(incognito, password)
 
 	// when switching modes we need to clear everything and start fresh
 	if err := backend.config.ClearAccountsConfig(); err != nil {
@@ -671,7 +677,7 @@ func (backend *Backend) UnlockIncognitoAccounts(password string) error {
 	if err := backend.config.UnlockWithPassword(password); err != nil {
 		return err
 	}
-	
+
 	// reinitialize accounts with the newly loaded config
 	backend.ReinitializeAccounts()
 	return nil
