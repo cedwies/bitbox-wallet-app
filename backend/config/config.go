@@ -257,7 +257,7 @@ type Config struct {
 
 	// we need this flag here so the config knows whether to encrypt/decrypt on its own,
 	// especially during startup before the main backend is fully running.
-	incognitoMode          bool
+	incognitoMode bool
 }
 
 // NewConfig creates a new Config, stored in the given location. The filename must be writable, but
@@ -270,14 +270,13 @@ func NewConfig(appConfigFilename string, accountsConfigFilename string) (*Config
 		accountsConfigFilename: accountsConfigFilename,
 		accountsConfig:         newDefaultAccountsonfig(),
 	}
-	// okay so this is a bit weird. we have to peek into the app config early,
-	// just to see if incognito mode is on. this tells us if we need to decrypt
-	// the accounts file right away.
-	// The incognitoMode flag in the frontend config is the source of truth at startup.
+	// bit of a hack here - we need to check if incognito mode is on
+	// before we try loading accounts.json, since it might be encrypted
+	// frontend config has the real value we should use
 	if jsonBytes, err := os.ReadFile(appConfigFilename); err == nil {
 		_ = json.Unmarshal(jsonBytes, &config.appConfig)
 	}
-	// The incognitoMode flag in the frontend config is the source of truth at startup.
+	// check if frontend config has incognito mode set
 	if frontendMap, ok := config.appConfig.Frontend.(map[string]interface{}); ok {
 		if incognito, ok := frontendMap["incognitoMode"].(bool); ok {
 			config.incognitoMode = incognito
@@ -336,12 +335,11 @@ func (config *Config) load() {
 
 	jsonBytes, err = os.ReadFile(config.accountsConfigFilename)
 	if err == nil {
-		// if we're in incognito, the accounts file should be encrypted.
-		// so we try to decrypt it here.
+		// if incognito is on, accounts.json is encrypted so decrypt it
 		if config.incognitoMode {
 			decryptedBytes, err := decryptToJSON(jsonBytes, []byte("hello"))
 			if err != nil {
-				// Could be wrong password or corrupted file, proceed with empty config.
+				// decryption failed, maybe wrong password? just use empty config
 				return
 			}
 			jsonBytes = decryptedBytes
@@ -381,21 +379,19 @@ func (config *Config) AccountsConfig() AccountsConfig {
 	return config.accountsConfig
 }
 
-// ModifyAccountsConfig calls f with the current config, allowing f to make any changes, and
-// persists the result if f returns nil error.  It propagates the f's error as is.
+// ClearAccountsConfig wipes all accounts and saves empty config
+func (config *Config) ClearAccountsConfig() error {
+	defer config.accountsConfigLock.Lock()()
+	config.accountsConfig = newDefaultAccountsonfig()
+	return config.save(config.accountsConfigFilename, config.accountsConfig)
+}
+
 func (config *Config) ModifyAccountsConfig(f func(*AccountsConfig) error) error {
 	defer config.accountsConfigLock.Lock()()
 	if err := f(&config.accountsConfig); err != nil {
 		return err
 	}
 	return config.save(config.accountsConfigFilename, config.accountsConfig)
-}
-
-// this is just a helper so the main backend can tell the config what's up
-// with incognito mode.
-// SetIncognitoMode sets the incognito mode flag.
-func (config *Config) SetIncognitoMode(incognito bool) {
-	config.incognitoMode = incognito
 }
 
 // the big save function. writes stuff to disk.
@@ -405,8 +401,7 @@ func (config *Config) save(filename string, conf interface{}) error {
 		return errp.WithStack(err)
 	}
 
-	// if we're saving the accounts file and incognito is on, we encrypt it first.
-	// otherwise, we just save it as plain json.
+	// encrypt accounts.json if incognito mode is on
 	if filename == config.accountsConfigFilename && config.incognitoMode {
 		encryptedBytes, err := encryptJSONBytes(jsonBytes, []byte("hello"))
 		if err != nil {
@@ -503,4 +498,14 @@ func migrateUserLanguage(appconf *AppConfig) {
 		appconf.Backend.UserLanguage = lang
 		delete(frontconf, "userLanguage")
 	}
+}
+
+// IncognitoMode tells you if we're in incognito mode
+func (config *Config) IncognitoMode() bool {
+	return config.incognitoMode
+}
+
+// SetIncognitoMode updates the incognito flag
+func (config *Config) SetIncognitoMode(incognito bool) {
+	config.incognitoMode = incognito
 }

@@ -26,6 +26,7 @@ type TProps = {
 // this provider wraps parts of the app that need to know about incognito mode
 export const IncognitoModeProvider = ({ children }: TProps) => {
   const [isIncognitoMode, setIsIncognitoMode] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false); // track if we've loaded config yet
 
   // when the component loads, we check the config for a saved incognito state
   useEffect(() => {
@@ -34,18 +35,25 @@ export const IncognitoModeProvider = ({ children }: TProps) => {
         // use config if it exists
         if (!!config.frontend && 'incognitoMode' in config.frontend) {
           setIsIncognitoMode(config.frontend.incognitoMode);
+          setIsInitialized(true);
           return;
         }
-        // else check backend state
-        getIncognitoMode().then(setIsIncognitoMode);
+        // fallback to backend if no frontend config
+        getIncognitoMode().then(mode => {
+          setIsIncognitoMode(mode);
+          setIsInitialized(true);
+        });
       })
       .catch(console.error);
   }, []);
 
-  // whenever the incognito state changes, we tell the backend about it
+  // sync changes to backend, but wait until we've read config first
+  // this prevents clearing accounts on startup
   useEffect(() => {
-    setIncognitoMode(isIncognitoMode);
-  }, [isIncognitoMode]);
+    if (isInitialized) {
+      setIncognitoMode(isIncognitoMode);
+    }
+  }, [isIncognitoMode, isInitialized]);
 
   // this function is what the toggle button calls to change the mode
   const toggleIncognitoMode = (incognitoMode: boolean) => {

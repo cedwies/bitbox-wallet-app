@@ -311,6 +311,7 @@ func NewBackend(arguments *arguments.Arguments, environment Environment) (*Backe
 		log: log,
 
 		testing:              backendConfig.AppConfig().Backend.StartInTestnet || arguments.Testing(),
+		incognitoMode:        backendConfig.IncognitoMode(), // grab incognito state from config so we dont lose it on restart
 		etherScanRateLimiter: rate.NewLimiter(rate.Limit(etherscan.CallsPerSec), 1),
 	}
 	// TODO: remove when connectivity check is present on all platforms
@@ -646,9 +647,22 @@ func (backend *Backend) IncognitoMode() bool {
 
 // SetIncognitoMode lets you flip the incognito switch
 func (backend *Backend) SetIncognitoMode(incognito bool) {
+	// dont do anything if we're already in the right mode
+	// this prevents clearing accounts unnecessarily 
+	if backend.incognitoMode == incognito {
+		return
+	}
+	
 	backend.incognitoMode = incognito
-	// tell the config object about it too, so it knows whether to encrypt/decrypt files.
+	// tell config about the change so it knows to encrypt stuff
 	backend.config.SetIncognitoMode(incognito)
+
+	// when switching modes we need to clear everything and start fresh
+	if err := backend.config.ClearAccountsConfig(); err != nil {
+		backend.log.WithError(err).Error("Failed to clear accounts config")
+		// even if clearing fails, try to reload stuff anyway
+	}
+	backend.ReinitializeAccounts()
 }
 
 // Accounts returns the current accounts of the backend.
