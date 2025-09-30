@@ -17,8 +17,11 @@ Steps:
 
 ```bash
 # clone with submodules
-git clone --recursive <this fork>
+git clone --recursive git@github.com:cedwies/bitbox-wallet-app.git
 cd bitbox-wallet-app
+
+# check out incognito-branch
+git checkout incognito-mode
 
 # initialize environment
 make envinit
