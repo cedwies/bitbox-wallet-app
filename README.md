@@ -1,188 +1,80 @@
-# BitBoxApp
+# BitBoxApp (Incognito Mode branch)
 
-![BitBoxApp Screenshot](./docs/assets/app-screen.png)
+This branch extends the BitBoxApp with an **experimental “incognito mode”** for the webserver build.  
+The goal is to prevent sensitive account data from being written unencrypted to disk, and to require a password to unlock watch-only accounts when incognito mode is active.
 
-This repo contains the source code for the BitBoxApp and related tools.
+---
 
-Contributions are very welcome.
-Please see the [contribution guidelines](CONTRIBUTING.md).
+## Build & Run
 
-## Tech stack
+Requirements (same as upstream):
 
-The wallet UI is a [React](https://reactjs.org/) single page webapp. It sources its data from the
-backend written in Go.
+- Go 1.24  
+- Node.js 20.x, NPM 10.x  
+- Qt 6.8.2 (with WebEngine)  
 
-The Desktop app is a C++ Qt program containing only a `WebEngineView`, displaying the UI.
+Steps:
 
-Static assets are sourced from a Qt rcc file, and the dynamic data is bridged from Go with
-WebChannels.
+```bash
+# clone with submodules
+git clone --recursive <this fork>
+cd bitbox-wallet-app
 
-The Go library is compiled as a C library which exposes two functions only: one to set up the
-bridge, and one to invoke calls in the backend.
+# initialize environment
+make envinit
 
-Similarly to the Desktop variant, the Go library can be compiled and added to an Android Studio /
-XCode project.
+# start backend
+make servewallet
 
-## Directories (subject to change)
+# for first use
+make buildweb
 
-- `cmd/`: Go projects which generate binaries are here.
-- `cmd/servewallet/`: a development aid which serves the static web ui and the http api it talks
-  to. See below.
-- `vendor/`: Go dependencies, created by `make go-vendor` based on Go modules.
-- `backend/coins/btc/electrum/`: A json rpc client library, talking to Electrum servers.
-- `backend/devices/{bitbox,bitbox02}/`: Library to detect and talk to BitBoxes. High level API access.
-- `backend/coins/btc/`: Local HD wallet, sourcing blockchain index from an arbitrary
-  backend. Manages addresses, outputs, tx creation, and everything else that a wallet needs to do.
-- `backend/`: The library that ties it all together. Uses the above packages to create a wallet
-  talking Electrum using the BitBox for signing, and serve a high level HTTP API to control it.
-- `frontends/qt/`: the C++/Qt app which builds the wallet app for the desktop.
-- `frontends/android/`: Android target
-- `frontends/web/`: home of the React UI.
-
-## Set up the development environment
-
-The below instructions assume a unix environment.
-
-### Requirements
-
-To build the app or run the development workflow, the following dependencies need to be installed:
-
-- [Go](https://golang.org/doc/install) version 1.24
-- [Node.js](https://nodejs.org/) version 20.x
-- [NPM](https://docs.npmjs.com/about-npm-versions) version 10.x or newer
-- [Qt](https://www.qt.io) version 6.8.2
-  - install Qt for your platform, including the WebEngine component
-
-## Build the BitBoxApp
-
-Clone this repository using `git clone --recursive`.
-
-Please consult [docs/BUILD.md](./docs/BUILD.md) for platform specific instructions and further information.
-
-## I18N translation workflow
-
-Please consult [docs/i18n.md](./docs/i18n.md).
-
-## Electrum server backend
-
-The servers used are configurable in the app settings. Currently, when running the app in devmode
-(`make servewallet`), the config is ignored and servers on Shift's devserver are used. The
-hosts/ports/certs of those are currently hardcoded.
-
-Currently, [Electrs](https://github.com/romanz/electrs) and
-[ElectrumX](https://github.com/spesmilo/electrumx/) are the recommended ways to connect your own
-full node.
-
-## Development workflow
-
-### Local development
-
-Run `make envinit` to fetch golangci-lint and some other devtools.
-
-Run `make servewallet` and `make webdev` in seperate terminals.
-
-Before the first use of `make webdev`, you also need to run `make buildweb`, to install the dev
-dependencies.
-
-#### Watch and build the UI
-
-Run `make webdev` to develop the UI inside a web browser (for quick development, automatic rebuilds
-and devtools). This serves the UI on [localhost:8080](http://localhost:8080). Changes to the web
-code in `frontends/web/src` are automatically detected and rebuilt.
-
-#### UI testing
-
-The frontend tests are run using [vitest](https://vitest.dev/) and [@testing-library/react](https://testing-library.com/).
-
-To run all test suites, execute `make webtest`.
-
-#### E2E testing
-
-Playwright is used to perform automatic test on some use cases on the webdev version.
-
-Tests are located under [`frontends/web/tests`](/frontends/web/tests) and can be run with
-`make webe2etest`
-
-#### Run the HTTP API
-
-Run `make servewallet` to compile the code and run `servewallet`. `servewallet` is a devtool which
-serves the HTTP API. Changes to the backend code are *not* automatically detected, so you need to
-restart the server after changes.
-
-#### Go dependencies
-
-Go dependencies are managed by `go mod`, and vendored using `make go-vendor`. The deps are vendored
-so that
-
-- offline builds work
-- dependency diffs are easier to inspect
-- less reliance on remote systems
-- because `gomobile bind` does not support Go modules yet
-
-#### NPM dependencies
-
-All dependencies are locked in `package-lock.json` so that subsequent installs and different installations get the exact same dependency tree. To run any of the following npm commands run `cd frontends/web` first.
-
-**Note:** Some devDependencies in `package.json` are specified with a semver range operator i.e. `"typescript": "^4.4.2"`. The main reason is that those dependencies can be **updated** anytime within the range by running `npm update`.
-
-Check **outdated** dependencies: `npm outdated`.
-
-**Update a specific dependency** with a fixed semver `npm install modulename@specificversion --save-exact`, and with `--save-dev` for devDependencies.
-
-#### Qt WebEngine Debugging
-
-Set the following environment variable to debug the Qt WebEngine with Chrome developer tools,
-use a port_number of your choice, launch the following command and go to `http://localhost:<port_number>`.
-
-```
-QTWEBENGINE_REMOTE_DEBUGGING=<port_number> ./frontends/qt/build/osx/BitBox.app/Contents/MacOS/BitBox
+# start frontend
+make webdev
 ```
 
-Or on Windows using PowerShell
+This serves the UI on [http://localhost:8080](http://localhost:8080).  
+The HTTP API is served by `servewallet`.
 
-```
-$env:QTWEBENGINE_REMOTE_DEBUGGING=<port_number>
-Start-Process .\BitBox.exe
-```
+---
 
-see also https://doc.qt.io/qt-6/qtwebengine-debugging.html
+## Incognito Mode (what this branch adds)
 
-### CI
+- Backend flag `incognitoMode` prevents `accounts.json` from being written to disk in cleartext.
+- When enabled, saved watch-only accounts must be unlocked with a password before use.
+- When `incognitoMode` is enabled, a fixed sized encrypted accounts.json is always present, to not reveal whether watch-only accounts have been saved or not.
 
-Run `make ci` to run all static analysis tools and tests.
+---
 
-### Build the UI
+## Limitations & Future Work
 
-To statically compile the UI, run `make buildweb` again, which compiles the web ui into a compact
-bundle.
+This is **not yet a full incognito mode**. Open issues:
 
-## Develop using Docker
+1. **Security hardening**
+   - In-memory key management is basic; wiping on lock/logout should be more robust.
+   - Need fuzzing, integration, and adversarial testing.
+2. **Database layer**
+   - The `bbolt` DB still writes sensitive watch-only account data to disk.  
+     Options:  
+     - Write encrypted snapshots every X commits (hurts performance, probably not feasible), or  
+     - Replace with a fully encrypted DB backend.
+3. **Testing**
+   - Unit tests and integration tests for the new API are still minimal.
+   - Needs reproducible coverage (happy paths, wrong passwords, tampering).
+4. **Scope**
+   - Currently only implemented for the **webserver variant** (`servewallet`).  
+   - Desktop and mobile builds are not yet wired up.
+5. **Only valid passwords**
+   - Currently, when a user enters a wrong password to unlock the App in incognito mode, only the correct password works. 
+   - One modification is to treat every password as valid, while simply showing no remembered watch-only accounts when the password cannot decrypt the `accounts.json`
+6. **Benchmark encryption of accounts.json**
+   - Currently, an encrypted `accounts.json` is padded to ~64 kb
+   - One can reduce the padded size (e.g. to 32 kb) to improve performance, as long as a valid `accounts.json` is almost guaranteed to not exceed the padding size.
 
-The Dockerfile provides a Ubuntu container with the whole environment preconfigured. To set it up,
-run `make dockerinit`, which builds the Docker image (this takes a while).
+---
 
-After that, `make dockerdev` enters the container (a shell inside an Ubuntu virtual machine), where
-you can perform the same steps as in the previous section (`make servewallet` and `make
-webdev`).
+## Motivation
 
-Before the first use of `make webdev`, you also need to run `make buildweb`, to install the dev
-dependencies.
-
-Running `make dockerdev` multiple times shares the same container. You can edit the code
-in your usual editor in the host and compile inside the container.
-
-To execute `make servewallet` and `make webdev` insider the container, but from the host, use this:
-
-`$ ./scripts/docker_exec.sh servewallet/webdev`
-
-## Testnet coins
-
-In development mode, any password entered derives a unique testnet wallet.
-
-Get Bitcoin Testnet coins here: https://coinfaucet.eu/en/btc-testnet/
-
-Get Litecoin Testnet coins here: https://tltc.bitaps.com/
-
-Get Ethereum Sepolia coins here: https://faucet.sepolia.dev/
-
-In case any of the Ethereum faucets are not working, you can try others from here: https://faucetlink.to (some require account creation)
+I know this is only a starting point: the feature needs hardening, testing, and deeper backend changes.  
+But I wanted to contribute something concrete that opens the conversation about privacy and disk persistence in BitBoxApp.
+This fork also served as a quick self-onboarding into the BitBoxApp.

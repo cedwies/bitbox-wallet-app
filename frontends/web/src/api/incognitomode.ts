@@ -1,19 +1,36 @@
 import { apiGet, apiPost } from '@/utils/request';
 
-// tells the backend to flip incognito mode on or off
-// when turning ON, you need to provide a password
-// when turning OFF, password can be empty string
-export const setIncognitoMode = (isIncognito: boolean, password: string = ''): Promise<null> => {
-  return apiPost('set-incognito-mode', { incognitoMode: isIncognito, password });
+// what the backend tells us about incognito state
+export interface IncognitoStatus {
+  incognito: boolean; // is incognito mode turned on?
+  locked: boolean; // are accounts encrypted and password not in memory?
+}
+
+// api calls for the new incognito endpoints
+
+// ask backend what the current incognito situation is
+export const getIncognitoStatus = (): Promise<IncognitoStatus> => {
+  return apiGet('incognito/status');
 };
 
-// asks the backend if incognito mode is currently enabled
-export const getIncognitoMode = (): Promise<boolean> => {
-  return apiGet('incognito-mode');
+// turn on incognito mode with a password
+export const enableIncognitoMode = (password: string): Promise<{ success: boolean }> => {
+  return apiPost('incognito/enable', { password });
 };
 
-// checks if the backend has a password stored (length > 0)
-// this is used to decide whether to show the password gate or not
-export const getIncognitoPasswordStatus = (): Promise<boolean> => {
-  return apiGet('incognito-password-status');
+// turn off incognito mode completely
+export const disableIncognitoMode = (): Promise<{ success: boolean }> => {
+  return apiPost('incognito/disable', {});
 };
+
+// unlock encrypted accounts with password
+export const unlockIncognitoAccounts = (password: string): Promise<{ success: boolean }> => {
+  return apiPost('incognito/unlock', { password });
+};
+
+// lock accounts back up (clear password from memory)
+export const lockIncognitoAccounts = (): Promise<{ success: boolean }> => {
+  return apiPost('incognito/lock', {});
+};
+
+

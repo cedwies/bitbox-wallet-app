@@ -129,6 +129,8 @@ type Backend interface {
 	SetIncognitoMode(bool, string)
 	// unlock encrypted accounts with password
 	UnlockIncognitoAccounts(password string) error
+	// lock incognito accounts by clearing password from memory
+	LockIncognitoAccounts()
 }
 
 // Handlers provides a web api to the backend.
@@ -222,10 +224,13 @@ func NewHandlers(
 	getAPIRouterNoError(apiRouter)("/force-auth", handlers.postForceAuth).Methods("POST")
 	getAPIRouter(apiRouter)("/set-dark-theme", handlers.postDarkTheme).Methods("POST")
 	getAPIRouterNoError(apiRouter)("/detect-dark-theme", handlers.getDetectDarkTheme).Methods("GET")
-	getAPIRouterNoError(apiRouter)("/incognito-mode", handlers.getIncognitoMode).Methods("GET")
-	getAPIRouterNoError(apiRouter)("/incognito-password-status", handlers.getIncognitoPasswordStatus).Methods("GET")
-	getAPIRouter(apiRouter)("/set-incognito-mode", handlers.postIncognitoMode).Methods("POST")
-	getAPIRouter(apiRouter)("/unlock-incognito", handlers.postUnlockIncognito).Methods("POST")
+	// New incognito API namespace
+	getAPIRouterNoError(apiRouter)("/incognito/status", handlers.getIncognitoStatus).Methods("GET")
+	getAPIRouter(apiRouter)("/incognito/enable", handlers.postIncognitoEnable).Methods("POST")
+	getAPIRouter(apiRouter)("/incognito/disable", handlers.postIncognitoDisable).Methods("POST")
+	getAPIRouter(apiRouter)("/incognito/unlock", handlers.postIncognitoUnlock).Methods("POST")
+	getAPIRouter(apiRouter)("/incognito/lock", handlers.postIncognitoLock).Methods("POST")
+	
 	getAPIRouterNoError(apiRouter)("/version", handlers.getVersion).Methods("GET")
 	getAPIRouterNoError(apiRouter)("/testing", handlers.getTesting).Methods("GET")
 	getAPIRouterNoError(apiRouter)("/dev-servers", handlers.getDevServers).Methods("GET")
@@ -548,46 +553,69 @@ func (handlers *Handlers) getDetectDarkTheme(r *http.Request) interface{} {
 	return handlers.backend.Environment().DetectDarkTheme()
 }
 
-// postIncognitoMode is the api endpoint to set the incognito mode.
-func (handlers *Handlers) postIncognitoMode(r *http.Request) (interface{}, error) {
-	var args struct {
-		IncognitoMode bool   `json:"incognitoMode"`
-		Password      string `json:"password"`
+
+// New incognito API handlers
+
+// tell the frontend what's going on with incognito mode
+func (handlers *Handlers) getIncognitoStatus(r *http.Request) interface{} {
+	incognito := handlers.backend.IncognitoMode()
+	// locked means incognito is on but no password in memory
+	locked := incognito && !handlers.backend.HasIncognitoPassword()
+	
+	return map[string]interface{}{
+		"incognito": incognito,
+		"locked":    locked,
 	}
-	if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
-		return nil, errp.WithStack(err)
-	}
-	handlers.backend.SetIncognitoMode(args.IncognitoMode, args.Password)
-	return nil, nil
 }
 
-// getIncognitoMode is the api endpoint to get the current incognito state.
-func (handlers *Handlers) getIncognitoMode(r *http.Request) interface{} {
-	return handlers.backend.IncognitoMode()
-}
-
-// getIncognitoPasswordStatus checks if a password has been set for incognito mode
-func (handlers *Handlers) getIncognitoPasswordStatus(r *http.Request) interface{} {
-	return handlers.backend.HasIncognitoPassword()
-}
-
-// postUnlockIncognito attempts to unlock encrypted accounts with a password
-func (handlers *Handlers) postUnlockIncognito(r *http.Request) (interface{}, error) {
+// turn on incognito mode with a password
+func (handlers *Handlers) postIncognitoEnable(r *http.Request) (interface{}, error) {
 	var args struct {
 		Password string `json:"password"`
 	}
-
 	if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
 		return nil, errp.WithStack(err)
 	}
+	
+	if args.Password == "" {
+		return nil, errp.New("need a password to enable incognito")
+	}
+	
+	handlers.backend.SetIncognitoMode(true, args.Password)
+	return map[string]interface{}{"success": true}, nil
+}
 
+// turn off incognito mode completely
+func (handlers *Handlers) postIncognitoDisable(r *http.Request) (interface{}, error) {
+	handlers.backend.SetIncognitoMode(false, "")
+	return map[string]interface{}{"success": true}, nil
+}
+
+// unlock encrypted accounts with the password
+func (handlers *Handlers) postIncognitoUnlock(r *http.Request) (interface{}, error) {
+	var args struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
+		return nil, errp.WithStack(err)
+	}
+	
 	if err := handlers.backend.UnlockIncognitoAccounts(args.Password); err != nil {
 		return nil, errp.WithStack(err)
 	}
+	
+	return map[string]interface{}{"success": true}, nil
+}
 
-	return map[string]interface{}{
-		"success": true,
-	}, nil
+// lock accounts back up - clear password from memory
+func (handlers *Handlers) postIncognitoLock(r *http.Request) (interface{}, error) {
+	if !handlers.backend.IncognitoMode() {
+		return nil, errp.New("can't lock - not in incognito mode")
+	}
+	
+	// wipe password from memory and go back to locked state
+	handlers.backend.LockIncognitoAccounts()
+	return map[string]interface{}{"success": true}, nil
 }
 
 func (handlers *Handlers) getVersion(*http.Request) interface{} {

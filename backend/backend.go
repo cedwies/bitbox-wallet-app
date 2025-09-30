@@ -640,47 +640,54 @@ func (backend *Backend) Testing() bool {
 	return backend.testing
 }
 
-// IncognitoMode just tells you if incognito is on or off
+// simple getter to check if incognito mode is active
 func (backend *Backend) IncognitoMode() bool {
 	return backend.incognitoMode
 }
 
-// HasIncognitoPassword checks if a password has been set for incognito mode
+// check if we have a password in memory (means accounts are unlocked)
 func (backend *Backend) HasIncognitoPassword() bool {
 	return backend.config.HasIncognitoPassword()
 }
 
-// SetIncognitoMode lets you flip the incognito switch
+// turn incognito mode on or off
 func (backend *Backend) SetIncognitoMode(incognito bool, password string) {
-	// dont do anything if we're already in the right mode
-	// this prevents clearing accounts unnecessarily
+	// skip if we're already in the requested mode
 	if backend.incognitoMode == incognito {
 		return
 	}
 
 	backend.incognitoMode = incognito
-	// tell config about the change so it knows to encrypt stuff
-	// when enabling incognito, pass the password; when disabling, pass empty string
+	// let the config know about the change so it can handle encryption
 	backend.config.SetIncognitoMode(incognito, password)
 
-	// when switching modes we need to clear everything and start fresh
+	// switching modes means we need to wipe everything and reload
 	if err := backend.config.ClearAccountsConfig(); err != nil {
-		backend.log.WithError(err).Error("Failed to clear accounts config")
-		// even if clearing fails, try to reload stuff anyway
+		backend.log.WithError(err).Error("couldn't clear accounts config")
+		// keep going even if this fails
 	}
 	backend.ReinitializeAccounts()
 }
 
-// UnlockIncognitoAccounts attempts to decrypt and load accounts with the provided password
+// try to unlock encrypted accounts with a password
 func (backend *Backend) UnlockIncognitoAccounts(password string) error {
-	// try to unlock the config with the password
+	// ask config to decrypt and load accounts
 	if err := backend.config.UnlockWithPassword(password); err != nil {
 		return err
 	}
 
-	// reinitialize accounts with the newly loaded config
+	// reload all the account stuff with the new data
 	backend.ReinitializeAccounts()
 	return nil
+}
+
+// lock accounts back up - clear password and go back to empty state
+func (backend *Backend) LockIncognitoAccounts() {
+	// tell config to wipe the password
+	backend.config.LockIncognitoAccounts()
+	
+	// reload accounts (should be empty now)
+	backend.ReinitializeAccounts()
 }
 
 // Accounts returns the current accounts of the backend.

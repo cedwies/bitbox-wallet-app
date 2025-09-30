@@ -110,6 +110,9 @@ type Backend struct {
 	// Gap limits optionally forces gap limits for receive/change addresses used in bitcoin accounts
 	GapLimitReceive int `json:"gapLimitReceive"`
 	GapLimitChange  int `json:"gapLimitChange"`
+
+	// Incognito indicates whether the app is in incognito mode
+	Incognito bool `json:"incognito"`
 }
 
 // DeprecatedCoinActive returns the Active setting for a coin by code.  This call is should not be
@@ -255,13 +258,13 @@ type Config struct {
 	accountsConfig         AccountsConfig
 	accountsConfigLock     locker.Locker
 
-	// we need this flag here so the config knows whether to encrypt/decrypt on its own,
-	// especially during startup before the main backend is fully running.
+	// track if we're in incognito mode - needed so config can decide
+	// whether to encrypt/decrypt accounts.json during load/save operations
 	incognitoMode bool
 
-	// store the user password for encryption/decryption when in incognito mode
-	// it's needed because when AccountsConfig updates, it should update the
-	// accounts.json (so the password is needed to encrypt)
+	// keep the password in memory while incognito mode is active
+	// we need this because every time accounts.json gets saved, it needs
+	// to be encrypted with the same password the user entered
 	userPassword []byte
 }
 
@@ -275,18 +278,13 @@ func NewConfig(appConfigFilename string, accountsConfigFilename string) (*Config
 		accountsConfigFilename: accountsConfigFilename,
 		accountsConfig:         newDefaultAccountsonfig(),
 	}
-	// bit of a hack here - we need to check if incognito mode is on
-	// before we try loading accounts.json, since it might be encrypted
-	// frontend config has the real value we should use
+	// load app config first so we know if incognito mode is on
+	// (we need to know this before trying to read accounts.json since it might be encrypted)
 	if jsonBytes, err := os.ReadFile(appConfigFilename); err == nil {
 		_ = json.Unmarshal(jsonBytes, &config.appConfig)
 	}
-	// check if frontend config has incognito mode set
-	if frontendMap, ok := config.appConfig.Frontend.(map[string]interface{}); ok {
-		if incognito, ok := frontendMap["incognitoMode"].(bool); ok {
-			config.incognitoMode = incognito
-		}
-	}
+	// copy incognito flag from app config to our internal flag
+	config.incognitoMode = config.appConfig.Backend.Incognito
 
 	config.load()
 	appconf := config.appConfig
@@ -294,6 +292,7 @@ func NewConfig(appConfigFilename string, accountsConfigFilename string) (*Config
 	migrateFiatCode(&appconf)
 	migrateElectrumX(&appconf)
 	migrateUserLanguage(&appconf)
+	migrateIncognitoMode(&appconf)
 	if err := config.SetAppConfig(appconf); err != nil {
 		return nil, errp.WithStack(err)
 	}
@@ -513,59 +512,86 @@ func migrateUserLanguage(appconf *AppConfig) {
 	}
 }
 
-// IncognitoMode tells you if we're in incognito mode
-func (config *Config) IncognitoMode() bool {
-	return config.incognitoMode
+// clean up old frontend config - move incognito setting to backend where it belongs
+func migrateIncognitoMode(appconf *AppConfig) {
+	frontconf, ok := appconf.Frontend.(map[string]interface{})
+	if !ok {
+		return // no frontend config to migrate
+	}
+	if incognito, ok := frontconf["incognitoMode"].(bool); ok {
+		// move the setting to backend config
+		appconf.Backend.Incognito = incognito
+		// remove it from frontend config
+		delete(frontconf, "incognitoMode")
+	}
 }
 
-// HasIncognitoPassword checks if a password has been set for incognito mode
+// check if incognito mode is currently enabled
+func (config *Config) IncognitoMode() bool {
+	return config.appConfig.Backend.Incognito
+}
+
+// check if we have a password stored in memory (means accounts are unlocked)
 func (config *Config) HasIncognitoPassword() bool {
 	return len(config.userPassword) > 0
 }
 
-// SetIncognitoMode sets the incognito mode flag and optionally stores the password
+// turn incognito mode on/off and optionally store the password
 func (config *Config) SetIncognitoMode(incognito bool, password string) {
 	config.incognitoMode = incognito
-	// store password when enabling incognito mode
+	// backend config is the single source of truth now
+	config.appConfig.Backend.Incognito = incognito
+	
+	// if turning on incognito and we got a password, store it
 	if incognito && password != "" {
 		config.userPassword = []byte(password)
 	}
-	// clear password when disabling incognito mode
+	// if turning off incognito, clear the password
 	if !incognito {
 		config.userPassword = nil
 	}
+	// save the config change to disk
+	config.SetAppConfig(config.appConfig)
 }
 
-// UnlockWithPassword attempts to decrypt accounts.json with the provided password
-// and loads the accounts into memory, replacing any existing default accounts
+// try to unlock encrypted accounts with the given password
 func (config *Config) UnlockWithPassword(password string) error {
 	if !config.incognitoMode {
-		// trivial
-		return fmt.Errorf("not in incognito mode")
+		return fmt.Errorf("can't unlock - not in incognito mode")
 	}
 
-	// store the password for future save operations (see comment at attribute)
+	// keep the password around for future saves
 	config.userPassword = []byte(password)
 
-	// try to read and decrypt accounts.json (could be non existent or corrupted)
+	// read the encrypted accounts file
 	jsonBytes, err := os.ReadFile(config.accountsConfigFilename)
 	if err != nil {
-		return fmt.Errorf("could not read accounts file: %w", err)
+		return fmt.Errorf("couldn't read accounts file: %w", err)
 	}
 
-	// attempt decryption with provided password
+	// try to decrypt it with the password
 	decryptedBytes, err := decryptToJSON(jsonBytes, []byte(password))
 	if err != nil {
-		// TODO: decide on whether a "wrong password" response should even be given
+		// could be wrong password or corrupted file - we can't tell which
 		return fmt.Errorf("wrong password or corrupted file: %w", err)
 	}
 
-	// parse the decrypted JSON
+	// parse the decrypted json into our accounts config
 	defer config.accountsConfigLock.Lock()()
 	if err := json.Unmarshal(decryptedBytes, &config.accountsConfig); err != nil {
-		return fmt.Errorf("invalid accounts data: %w", err)
+		return fmt.Errorf("decrypted data isn't valid json: %w", err)
 	}
 
-	fmt.Printf("Successfully unlocked accounts with password - loaded %d accounts\n", len(config.accountsConfig.Accounts))
+	fmt.Printf("unlocked %d accounts successfully\n", len(config.accountsConfig.Accounts))
 	return nil
+}
+
+// lock everything back up - clear password and reset to empty accounts
+func (config *Config) LockIncognitoAccounts() {
+	// wipe the password from memory
+	config.userPassword = nil
+	
+	// go back to empty accounts config
+	defer config.accountsConfigLock.Lock()()
+	config.accountsConfig = newDefaultAccountsonfig()
 }

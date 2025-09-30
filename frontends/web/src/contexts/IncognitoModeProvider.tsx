@@ -1,66 +1,111 @@
 import { useState, useEffect, ReactNode } from 'react';
-import { getConfig, setConfig } from '@/utils/config';
-import { setIncognitoMode, getIncognitoMode } from '@/api/incognitomode';
+import {
+  getIncognitoStatus,
+  enableIncognitoMode,
+  disableIncognitoMode,
+  unlockIncognitoAccounts,
+  lockIncognitoAccounts,
+  IncognitoStatus
+} from '@/api/incognitomode';
 import { IncognitoModeContext } from './IncognitoModeContext';
 
 type TProps = {
   children: ReactNode;
 }
 
-// this provider manages incognito mode state across the whole app
-// it handles syncing between frontend config and backend state
+// manages incognito state for the whole app - backend is the source of truth
 export const IncognitoModeProvider = ({ children }: TProps) => {
-  const [isIncognitoMode, setIsIncognitoMode] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false); // prevents race conditions on startup
+  const [status, setStatus] = useState<IncognitoStatus>({ incognito: false, locked: false });
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  // on startup, load the incognito state from config
+  // grab the current status from backend
+  const loadStatus = async () => {
+    try {
+      const newStatus = await getIncognitoStatus();
+      setStatus(newStatus);
+      setIsInitialized(true);
+    } catch (error) {
+      console.error('couldnt load incognito status:', error);
+      // if we can't reach backend, assume worst case (locked)
+      setStatus({ incognito: true, locked: true });
+      setIsInitialized(true);
+    }
+  };
+
   useEffect(() => {
-    getConfig()
-      .then(config => {
-        // first try to get it from frontend config (saved locally)
-        if (!!config.frontend && 'incognitoMode' in config.frontend) {
-          setIsIncognitoMode(config.frontend.incognitoMode);
-          setIsInitialized(true);
-          return;
-        }
-        // if no frontend config, ask the backend
-        getIncognitoMode().then(mode => {
-          setIsIncognitoMode(mode);
-          setIsInitialized(true);
-        });
-      })
-      .catch(console.error);
+    loadStatus();
   }, []);
 
-  // sync state changes to backend, but only after we've loaded initial state
-  // this prevents accidentally clearing accounts on startup
-  useEffect(() => {
-    if (isInitialized) {
-      setIncognitoMode(isIncognitoMode, ''); // empty password for regular syncing
+  // wrapper functions that components can call
+  const enable = async (password: string) => {
+    try {
+      await enableIncognitoMode(password);
+      await loadStatus(); // get fresh status after change
+    } catch (error) {
+      console.error('couldnt enable incognito:', error);
+      throw error;
     }
-  }, [isIncognitoMode, isInitialized]);
+  };
 
-  // this is the main function that components call to toggle incognito mode
-  const toggleIncognitoMode = (incognitoMode: boolean, password?: string) => {
-    setIsIncognitoMode(incognitoMode); // update local state
+  const disable = async () => {
+    try {
+      await disableIncognitoMode();
+      await loadStatus(); // get fresh status after change
+    } catch (error) {
+      console.error('couldnt disable incognito:', error);
+      throw error;
+    }
+  };
 
-    // tell backend about the change (with password if provided)
-    setIncognitoMode(incognitoMode, password || '');
+  const unlock = async (password: string) => {
+    try {
+      await unlockIncognitoAccounts(password);
+      await loadStatus(); // get fresh status after change
+    } catch (error) {
+      console.error('couldnt unlock accounts:', error);
+      throw error;
+    }
+  };
 
-    // also save to frontend config so it persists across restarts
-    getConfig()
-      .then(config => {
-        setConfig({
-          frontend: {
-            ...config.frontend,
-            incognitoMode,
-          }
-        });
-      });
+  const lock = async () => {
+    try {
+      await lockIncognitoAccounts();
+      await loadStatus(); // get fresh status after change
+    } catch (error) {
+      console.error('couldnt lock accounts:', error);
+      throw error;
+    }
+  };
+
+  // old way of doing things - kept so existing code doesn't break
+  const toggleIncognitoMode = async (incognitoMode: boolean, password?: string) => {
+    if (incognitoMode) {
+      if (!password) {
+        throw new Error('need password to turn on incognito');
+      }
+      await enable(password);
+    } else {
+      await disable();
+    }
+  };
+
+  const contextValue = {
+    // new api - use these
+    status,
+    isInitialized,
+    enable,
+    disable,
+    unlock,
+    lock,
+    refreshStatus: loadStatus,
+
+    // old api - still works but prefer the new stuff
+    isIncognitoMode: status.incognito,
+    toggleIncognitoMode,
   };
 
   return (
-    <IncognitoModeContext.Provider value={{ isIncognitoMode, toggleIncognitoMode }}>
+    <IncognitoModeContext.Provider value={contextValue}>
       {children}
     </IncognitoModeContext.Provider>
   );
