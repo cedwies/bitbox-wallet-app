@@ -43,6 +43,7 @@ The HTTP API is served by `servewallet`.
 
 ## Incognito Mode (what this branch adds)
 
+- Incognito mode can be enabled/disabled in settings (general)
 - Backend flag `incognitoMode` prevents `accounts.json` from being written to disk in cleartext.
 - When enabled, saved watch-only accounts must be unlocked with a password before use.
 - When `incognitoMode` is enabled, a fixed sized encrypted accounts.json is always present, to not reveal whether watch-only accounts have been saved or not.
