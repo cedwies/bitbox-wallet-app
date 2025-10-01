@@ -62,6 +62,7 @@ This is **not yet a full incognito mode**. Open issues:
      Options:  
      - Write encrypted snapshots every X commits (hurts performance, probably not feasible), or  
      - Replace with a fully encrypted DB backend.
+     - Disable DB writes (to disk) during incognito mode (hurts performance after each restart of the app)
 3. **Testing**
    - Unit tests and integration tests for the new API are still minimal.
    - Needs reproducible coverage (happy paths, wrong passwords, tampering).
